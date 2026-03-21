@@ -6,6 +6,7 @@ val weaverV  = "0.8.4"
 ThisBuild / scalaVersion  := "3.3.4"
 ThisBuild / organization  := "io.github.discats"
 ThisBuild / name          := "discats"
+ThisBuild / version       := "0.0.1"
 
 // Publishing
 ThisBuild / homepage := Some(url("https://github.com/redball3/discats"))

@@ -16,7 +16,7 @@ A functional Scala library for building Discord bots, built on [Cats Effect](htt
 Add to your `build.sbt`:
 
 ```scala
-libraryDependencies += "io.github.discats" %% "discats" % "<version>"
+libraryDependencies += "io.github.discats" %% "discats" % "0.0.1"
 ```
 
 ## Quick Start
