@@ -17,8 +17,14 @@ ThisBuild / scmInfo := Some(ScmInfo(
 ThisBuild / developers := List(
   Developer("discats", "discats", "", url("https://github.com/discats")),
 )
-ThisBuild / sonatypeCredentialHost := "central.sonatype.com"
-ThisBuild / publishTo              := sonatypePublishToBundle.value
+// Publishing — GitHub Packages
+ThisBuild / publishTo := Some("GitHub Packages" at "https://maven.pkg.github.com/discats/discats")
+ThisBuild / credentials += Credentials(
+  "GitHub Package Registry",
+  "maven.pkg.github.com",
+  sys.env.getOrElse("GITHUB_ACTOR", ""),
+  sys.env.getOrElse("GITHUB_TOKEN", ""),
+)
 
 libraryDependencies ++= Seq(
   toolkit,
