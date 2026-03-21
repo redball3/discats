@@ -7,9 +7,9 @@ import discats.models.*
 import io.circe.*
 import io.circe.jawn.decode as jsonDecode
 import io.circe.syntax.*
-import munit.CatsEffectSuite
+import weaver.SimpleIOSuite
 
-class InteractionCodecSuite extends munit.FunSuite:
+object InteractionCodecSuite extends SimpleIOSuite:
 
   private def makeInteraction(name: String, options: List[InteractionOption] = Nil): Interaction =
     Interaction(
@@ -33,65 +33,64 @@ class InteractionCodecSuite extends munit.FunSuite:
       version   = 1,
     )
 
-  test("Interaction.commandName extracts command name") {
+  pureTest("Interaction.commandName extracts command name") {
     val i = makeInteraction("ping")
-    assertEquals(i.commandName, Some("ping"))
+    expect(i.commandName == Some("ping"))
   }
 
-  test("Interaction.stringOption extracts string value") {
+  pureTest("Interaction.stringOption extracts string value") {
     val opt = InteractionOption("text", CommandOptionType.String, Some(Json.fromString("hello")), None, None)
     val i   = makeInteraction("echo", List(opt))
-    assertEquals(i.stringOption("text"), Some("hello"))
-    assertEquals(i.stringOption("missing"), None)
+    expect(i.stringOption("text") == Some("hello")) and
+      expect(i.stringOption("missing") == None)
   }
 
-  test("Interaction.intOption extracts integer value") {
+  pureTest("Interaction.intOption extracts integer value") {
     val opt = InteractionOption("count", CommandOptionType.Integer, Some(Json.fromInt(42)), None, None)
     val i   = makeInteraction("repeat", List(opt))
-    assertEquals(i.intOption("count"), Some(42L))
+    expect(i.intOption("count") == Some(42L))
   }
 
-  test("Interaction.boolOption extracts boolean value") {
+  pureTest("Interaction.boolOption extracts boolean value") {
     val opt = InteractionOption("flag", CommandOptionType.Boolean, Some(Json.fromBoolean(true)), None, None)
     val i   = makeInteraction("cmd", List(opt))
-    assertEquals(i.boolOption("flag"), Some(true))
+    expect(i.boolOption("flag") == Some(true))
   }
 
-  test("InteractionResponse.reply encodes correctly") {
+  pureTest("InteractionResponse.reply encodes correctly") {
     val resp = InteractionResponse.reply("Pong!")
     val enc  = resp.asJson
-    assertEquals((enc \\ "type").headOption, Some(Json.fromInt(4)))
     val content = enc.hcursor.downField("data").downField("content").as[String]
-    assertEquals(content, Right("Pong!"))
+    expect((enc \\ "type").headOption == Some(Json.fromInt(4))) and
+      expect(content == Right("Pong!"))
   }
 
-  test("InteractionResponse.replyEphemeral sets ephemeral flag") {
-    val resp = InteractionResponse.replyEphemeral("Secret!")
-    val enc  = resp.asJson
-    val flags = enc.hcursor.downField("data").downField("flags").as[Int]
-    assertEquals(flags, Right(64)) // 1 << 6
+  pureTest("InteractionResponse.replyEphemeral sets ephemeral flag") {
+    val resp  = InteractionResponse.replyEphemeral("Secret!")
+    val flags = resp.asJson.hcursor.downField("data").downField("flags").as[Int]
+    expect(flags == Right(64)) // 1 << 6
   }
 
-  test("InteractionResponse.defer encodes deferred type") {
+  pureTest("InteractionResponse.defer encodes deferred type") {
     val resp = InteractionResponse.defer()
-    assertEquals(resp.asJson.hcursor.downField("type").as[Int], Right(5))
+    expect(resp.asJson.hcursor.downField("type").as[Int] == Right(5))
   }
 
-  test("ApplicationCommand encodes with options") {
+  pureTest("ApplicationCommand encodes with options") {
     val cmd = ApplicationCommand("greet", "Say hello")
       .string("name", "Who to greet", required = true)
-    val enc = cmd.asJson
-    assertEquals((enc \\ "name").headOption.flatMap(_.asString), Some("greet"))
+    val enc     = cmd.asJson
     val options = enc.hcursor.downField("options").as[List[Json]]
-    assert(options.isRight && options.toOption.get.size == 1)
+    expect((enc \\ "name").headOption.flatMap(_.asString) == Some("greet")) and
+      expect(options.isRight && options.toOption.get.size == 1)
   }
 
-  test("InteractionCallbackData.asEphemeral sets ephemeral flag") {
+  pureTest("InteractionCallbackData.asEphemeral sets ephemeral flag") {
     val d = InteractionCallbackData.text("hi").asEphemeral
-    assertEquals(d.flags, Some(64))
+    expect(d.flags == Some(64))
   }
 
-class SlashCommandRouterSuite extends CatsEffectSuite:
+object SlashCommandRouterSuite extends SimpleIOSuite:
 
   private def makeInteraction(name: String): Interaction =
     Interaction(
@@ -114,7 +113,7 @@ class SlashCommandRouterSuite extends CatsEffectSuite:
       router  = SlashCommandRouter[IO].on("ping")(_ => IO.pure(InteractionResponse.reply("Pong!")))
       _      <- router.dispatch(makeInteraction("ping"), client)
       r      <- called.get
-    yield assert(r)
+    yield expect(r)
   }
 
   test("router calls fallback for unknown commands") {
@@ -124,7 +123,7 @@ class SlashCommandRouterSuite extends CatsEffectSuite:
       router  = SlashCommandRouter[IO].withFallback(_ => IO.pure(InteractionResponse.reply("fallback")))
       _      <- router.dispatch(makeInteraction("unknown"), client)
       r      <- called.get
-    yield assert(r)
+    yield expect(r)
   }
 
   test("router responds with error message for unknown command without fallback") {
@@ -134,7 +133,7 @@ class SlashCommandRouterSuite extends CatsEffectSuite:
       router  = SlashCommandRouter[IO]
       _      <- router.dispatch(makeInteraction("oops"), client)
       r      <- called.get
-    yield assert(r)
+    yield expect(r)
   }
 
 /** Minimal stub RestClient that records whether respondToInteraction was called. */

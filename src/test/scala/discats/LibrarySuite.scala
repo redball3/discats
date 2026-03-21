@@ -6,97 +6,91 @@ import discats.models.*
 import io.circe.*
 import io.circe.syntax.*
 import io.circe.jawn.decode as jsonDecode
-import munit.CatsEffectSuite
+import weaver.SimpleIOSuite
 
-class SnowflakeSuite extends munit.FunSuite:
+object SnowflakeSuite extends SimpleIOSuite:
 
-  test("Snowflake encodes to number") {
+  pureTest("Snowflake encodes to number") {
     val sf = Snowflake(1234567890123456789L)
-    assertEquals(sf.asJson, Json.fromLong(1234567890123456789L))
+    expect(sf.asJson == Json.fromLong(1234567890123456789L))
   }
 
-  test("Snowflake decodes from string") {
+  pureTest("Snowflake decodes from string") {
     val json = Json.fromString("1234567890123456789")
-    assertEquals(json.as[Snowflake], Right(Snowflake(1234567890123456789L)))
+    expect(json.as[Snowflake] == Right(Snowflake(1234567890123456789L)))
   }
 
-  test("Snowflake decodes from number") {
+  pureTest("Snowflake decodes from number") {
     val json = Json.fromLong(42L)
-    assertEquals(json.as[Snowflake], Right(Snowflake(42L)))
+    expect(json.as[Snowflake] == Right(Snowflake(42L)))
   }
 
-  test("Snowflake.asString") {
+  pureTest("Snowflake.asString") {
     val sf = Snowflake(999L)
-    assertEquals(sf.asString, "999")
+    expect(sf.asString == "999")
   }
 
-  test("Snowflake codec round-trip") {
+  pureTest("Snowflake codec round-trip") {
     val sf  = Snowflake(123L)
     val enc = sf.asJson
-    assertEquals(enc.as[Snowflake], Right(sf))
+    expect(enc.as[Snowflake] == Right(sf))
   }
 
-class GatewayPayloadSuite extends munit.FunSuite:
+object GatewayPayloadSuite extends SimpleIOSuite:
 
-  test("decode Hello payload") {
-    val raw    = """{"op":10,"d":{"heartbeat_interval":41250},"s":null,"t":null}"""
-    val result = jsonDecode[GatewayPayload](raw)
-    assert(result.isRight, s"expected Right but got $result")
-    val p = result.toOption.get
-    assertEquals(p.op, Opcode.Hello)
-    assertEquals(
-      p.d.flatMap(_.hcursor.downField("heartbeat_interval").as[Long].toOption),
-      Some(41250L),
-    )
+  pureTest("decode Hello payload") {
+    val raw = """{"op":10,"d":{"heartbeat_interval":41250},"s":null,"t":null}"""
+    jsonDecode[GatewayPayload](raw) match
+      case Left(err) => failure(s"expected Right but got Left($err)")
+      case Right(p) =>
+        expect(p.op == Opcode.Hello) and
+          expect(p.d.flatMap(_.hcursor.downField("heartbeat_interval").as[Long].toOption) == Some(41250L))
   }
 
-  test("decode Dispatch payload") {
-    val raw    = """{"op":0,"d":{"content":"hello"},"s":1,"t":"MESSAGE_CREATE"}"""
-    val result = jsonDecode[GatewayPayload](raw)
-    assert(result.isRight, s"expected Right but got $result")
-    val p = result.toOption.get
-    assertEquals(p.op, Opcode.Dispatch)
-    assertEquals(p.s, Some(1))
-    assertEquals(p.t, Some("MESSAGE_CREATE"))
+  pureTest("decode Dispatch payload") {
+    val raw = """{"op":0,"d":{"content":"hello"},"s":1,"t":"MESSAGE_CREATE"}"""
+    jsonDecode[GatewayPayload](raw) match
+      case Left(err) => failure(s"expected Right but got Left($err)")
+      case Right(p) =>
+        expect(p.op == Opcode.Dispatch) and
+          expect(p.s == Some(1)) and
+          expect(p.t == Some("MESSAGE_CREATE"))
   }
 
-  test("GatewayPayload heartbeat encodes correctly") {
+  pureTest("GatewayPayload heartbeat encodes correctly") {
     val p    = GatewayPayload.heartbeat(Some(42))
     val json = p.asJson
-    assertEquals((json \\ "op").headOption, Some(Json.fromInt(1)))
-    assertEquals((json \\ "d").headOption, Some(Json.fromInt(42)))
+    expect((json \\ "op").headOption == Some(Json.fromInt(1))) and
+      expect((json \\ "d").headOption == Some(Json.fromInt(42)))
   }
 
-  test("GatewayPayload codec round-trip") {
+  pureTest("GatewayPayload codec round-trip") {
     val p   = GatewayPayload(Opcode.HeartbeatAck, None, None, None)
     val enc = p.asJson
     val dec = enc.as[GatewayPayload]
-    assertEquals(dec.map(_.op), Right(Opcode.HeartbeatAck))
+    expect(dec.map(_.op) == Right(Opcode.HeartbeatAck))
   }
 
-class GatewayEventSuite extends munit.FunSuite:
+object GatewayEventSuite extends SimpleIOSuite:
 
-  test("fromPayload returns None for non-Dispatch") {
+  pureTest("fromPayload returns None for non-Dispatch") {
     val p = GatewayPayload(Opcode.Hello, None, None, None)
-    assertEquals(GatewayEvent.fromPayload(p), None)
+    expect(GatewayEvent.fromPayload(p) == None)
   }
 
-  test("fromPayload returns Unknown for unhandled event") {
+  pureTest("fromPayload returns Unknown for unhandled event") {
     val p = GatewayPayload(Opcode.Dispatch, Some(Json.obj()), None, Some("SOME_UNKNOWN_EVENT"))
-    assertEquals(
-      GatewayEvent.fromPayload(p),
-      Some(GatewayEvent.Unknown("SOME_UNKNOWN_EVENT", Some(Json.obj()))),
-    )
+    expect(GatewayEvent.fromPayload(p) == Some(GatewayEvent.Unknown("SOME_UNKNOWN_EVENT", Some(Json.obj()))))
   }
 
-  test("fromPayload handles RESUMED") {
+  pureTest("fromPayload handles RESUMED") {
     val p = GatewayPayload(Opcode.Dispatch, None, Some(1), Some("RESUMED"))
-    assertEquals(GatewayEvent.fromPayload(p), Some(GatewayEvent.Resumed))
+    expect(GatewayEvent.fromPayload(p) == Some(GatewayEvent.Resumed))
   }
 
-class ModelCodecSuite extends munit.FunSuite:
+object ModelCodecSuite extends SimpleIOSuite:
 
-  test("Channel round-trips JSON") {
+  pureTest("Channel round-trips JSON") {
     val channel = Channel(
       id            = Snowflake(1L),
       `type`        = ChannelType.GuildText,
@@ -109,12 +103,11 @@ class ModelCodecSuite extends munit.FunSuite:
       parentId      = None,
     )
     val encoded = channel.asJson
-    val decoded = encoded.as[Channel]
-    assertEquals(decoded, Right(channel))
+    expect(encoded.as[Channel] == Right(channel))
   }
 
-  test("MessageCreate encodes content") {
+  pureTest("MessageCreate encodes content") {
     val mc  = MessageCreate(content = "hello!")
     val enc = mc.asJson
-    assertEquals((enc \\ "content").headOption, Some(Json.fromString("hello!")))
+    expect((enc \\ "content").headOption == Some(Json.fromString("hello!")))
   }
