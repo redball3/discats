@@ -13,11 +13,22 @@ A functional Scala library for building Discord bots, built on [Cats Effect](htt
 
 ## Installation
 
-Add to your `build.sbt`:
+Add the GitHub Packages resolver and the dependency to your `build.sbt`:
 
 ```scala
+resolvers += "GitHub Packages" at "https://maven.pkg.github.com/redball3/discats"
+
+credentials += Credentials(
+  "GitHub Package Registry",
+  "maven.pkg.github.com",
+  sys.env.getOrElse("GITHUB_ACTOR", ""),
+  sys.env.getOrElse("GITHUB_TOKEN", ""),
+)
+
 libraryDependencies += "io.github.discats" %% "discats" % "0.0.1"
 ```
+
+A GitHub personal access token with `read:packages` scope is required. Set `GITHUB_ACTOR` to your GitHub username and `GITHUB_TOKEN` to your token.
 
 ## Quick Start
 
