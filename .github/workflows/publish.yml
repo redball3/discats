@@ -19,6 +19,9 @@ jobs:
           java-version: '11'
           distribution: 'temurin'
 
+      - name: Set up sbt
+        uses: sbt/setup-sbt@v1
+
       - name: Publish
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
