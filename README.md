@@ -130,4 +130,4 @@ InteractionResponse.defer(ephemeral = false)         // Deferred response
 
 ## License
 
-See [LICENSE](LICENSE).
+MIT — see [LICENSE](LICENSE).

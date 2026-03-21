@@ -8,17 +8,20 @@ ThisBuild / organization  := "io.github.discats"
 ThisBuild / name          := "discats"
 
 // Publishing
-ThisBuild / homepage := Some(url("https://github.com/discats/discats"))
-ThisBuild / licenses := List("Apache-2.0" -> url("https://www.apache.org/licenses/LICENSE-2.0"))
+ThisBuild / homepage := Some(url("https://github.com/redball3/discats"))
+ThisBuild / licenses := List("MIT" -> url("https://opensource.org/licenses/MIT"))
 ThisBuild / scmInfo := Some(ScmInfo(
-  url("https://github.com/discats/discats"),
-  "scm:git:git@github.com:discats/discats.git",
+  url("https://github.com/redball3/discats"),
+  "scm:git:git@github.com:redball3/discats.git",
 ))
 ThisBuild / developers := List(
-  Developer("discats", "discats", "", url("https://github.com/discats")),
+  Developer("redball3", "Richie Lee", "", url("https://github.com/redball3")),
 )
 // Publishing — GitHub Packages
-ThisBuild / publishTo := Some("GitHub Packages" at "https://maven.pkg.github.com/discats/discats")
+ThisBuild / publishTo := {
+  val repo = sys.env.getOrElse("GITHUB_REPOSITORY", "redball3/discats")
+  Some("GitHub Packages" at s"https://maven.pkg.github.com/$repo")
+}
 ThisBuild / credentials += Credentials(
   "GitHub Package Registry",
   "maven.pkg.github.com",
