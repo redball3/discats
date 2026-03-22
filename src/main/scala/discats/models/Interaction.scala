@@ -2,6 +2,7 @@ package discats.models
 
 import io.circe.*
 import io.circe.generic.semiauto.*
+import io.circe.syntax.*
 import io.circe.derivation.{Configuration, ConfiguredDecoder, ConfiguredEncoder}
 
 /** Discord interaction types. */
@@ -58,23 +59,26 @@ object ApplicationCommandData:
   given Decoder[ApplicationCommandData] = ConfiguredDecoder.derived
   given Encoder[ApplicationCommandData] = ConfiguredEncoder.derived
 
-/** A Discord interaction (slash command, component, modal, etc.). */
-final case class Interaction(
-    id: Snowflake,
-    applicationId: Snowflake,
-    `type`: InteractionType,
-    data: Option[ApplicationCommandData],
-    guildId: Option[Snowflake],
-    channelId: Option[Snowflake],
-    member: Option[GuildMember],
-    user: Option[User],
-    token: String,
-    version: Int,
-) {
-  /** The user who triggered this interaction (works in DMs and guilds). */
-  def invoker: Option[User] = user.orElse(member.flatMap(_.user))
+/** Common interface for all Discord interaction subtypes.
+  *
+  * Pattern match on [[GuildInteraction]] or [[ChannelInteraction]] to access
+  * context-specific fields:
+  * {{{
+  * interaction match
+  *   case g: GuildInteraction   => s"From guild ${g.guildId}, member ${g.member.nick}"
+  *   case c: ChannelInteraction => s"From DM, user ${c.user.username}"
+  * }}}
+  */
+sealed trait Interaction:
+  def id: Snowflake
+  def applicationId: Snowflake
+  def `type`: InteractionType
+  def data: Option[ApplicationCommandData]
+  def channelId: Option[Snowflake]
+  def token: String
+  def version: Int
 
-  /** The command name, if this is an application command interaction. */
+  /** The name of the command, if this is an application command interaction. */
   def commandName: Option[String] =
     if `type` == InteractionType.ApplicationCommand then data.map(_.name) else None
 
@@ -89,12 +93,66 @@ final case class Interaction(
   /** Look up a boolean option by name. */
   def boolOption(name: String): Option[Boolean] =
     data.flatMap(_.options).flatMap(_.find(_.name == name)).flatMap(_.value).flatMap(_.asBoolean)
-}
 
 object Interaction:
+  /** Decodes as [[GuildInteraction]] when `guild_id` is present, otherwise [[ChannelInteraction]]. */
+  given Decoder[Interaction] = (c: HCursor) =>
+    c.downField("guild_id").as[Option[Snowflake]].flatMap {
+      case Some(_) => c.as[GuildInteraction]
+      case None    => c.as[ChannelInteraction]
+    }
+
+  given Encoder[Interaction] = Encoder.instance {
+    case g: GuildInteraction   => g.asJson
+    case c: ChannelInteraction => c.asJson
+  }
+
+/** An interaction triggered within a guild.
+  *
+  * Both `guildId` and `member` are guaranteed to be present — use this type
+  * when your command logic needs guild or member context.
+  */
+final case class GuildInteraction(
+    id: Snowflake,
+    applicationId: Snowflake,
+    `type`: InteractionType,
+    data: Option[ApplicationCommandData],
+    guildId: Snowflake,
+    channelId: Option[Snowflake],
+    member: GuildMember,
+    token: String,
+    version: Int,
+) extends Interaction:
+  /** The guild member who triggered this interaction. May be absent for bots. */
+  def invoker: Option[User] = member.user
+
+object GuildInteraction:
   private given Configuration = Configuration.default.withSnakeCaseMemberNames
-  given Decoder[Interaction] = ConfiguredDecoder.derived
-  given Encoder[Interaction] = ConfiguredEncoder.derived
+  given Decoder[GuildInteraction] = ConfiguredDecoder.derived
+  given Encoder[GuildInteraction] = ConfiguredEncoder.derived
+
+/** An interaction triggered outside a guild (DM or group DM).
+  *
+  * `user` is guaranteed to be present — use this type when your command
+  * logic needs the invoking user directly.
+  */
+final case class ChannelInteraction(
+    id: Snowflake,
+    applicationId: Snowflake,
+    `type`: InteractionType,
+    data: Option[ApplicationCommandData],
+    channelId: Option[Snowflake],
+    user: User,
+    token: String,
+    version: Int,
+) extends Interaction:
+  /** The user who triggered this interaction. */
+  def invoker: User = user
+
+object ChannelInteraction:
+  private given Configuration = Configuration.default.withSnakeCaseMemberNames
+  given Decoder[ChannelInteraction] = ConfiguredDecoder.derived
+  given Encoder[ChannelInteraction] = ConfiguredEncoder.derived
 
 // ── Interaction Responses ────────────────────────────────────────────────────
 

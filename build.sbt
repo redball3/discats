@@ -1,12 +1,11 @@
 
 val toolkitV = "0.1.28"
-val toolkit  = "org.typelevel"    %% "toolkit"      % toolkitV
+val toolkit  = "org.typelevel" %% "toolkit" % toolkitV
 val weaverV  = "0.8.4"
 
-ThisBuild / scalaVersion  := "3.3.4"
-ThisBuild / organization  := "io.github.discats"
-ThisBuild / name          := "discats"
-ThisBuild / version       := "0.0.1"
+ThisBuild / scalaVersion := "3.3.4"
+ThisBuild / organization := "io.github.discats"
+ThisBuild / version      := "0.0.1"
 
 // Publishing
 ThisBuild / homepage := Some(url("https://github.com/redball3/discats"))
@@ -30,10 +29,26 @@ ThisBuild / credentials += Credentials(
   sys.env.getOrElse("GITHUB_TOKEN", ""),
 )
 
-libraryDependencies ++= Seq(
-  toolkit,
-  "io.circe"            %% "circe-generic" % "0.14.8",
-  "com.disneystreaming" %% "weaver-cats"   % weaverV % Test,
-)
+lazy val root = (project in file("."))
+  .settings(
+    name := "discats",
+    libraryDependencies ++= Seq(
+      toolkit,
+      "io.circe"            %% "circe-generic" % "0.14.8",
+      "com.disneystreaming" %% "weaver-cats"   % weaverV % Test,
+    ),
+    testFrameworks += new TestFramework("weaver.framework.CatsEffect"),
+  )
 
-testFrameworks += new TestFramework("weaver.framework.CatsEffect")
+/** Test helpers for bot authors. Add to your project with:
+  * {{{
+  * libraryDependencies += "io.github.discats" %% "discats-testkit" % "<version>" % Test
+  * }}}
+  */
+lazy val testkit = (project in file("testkit"))
+  .dependsOn(root)
+  .settings(
+    name := "discats-testkit",
+    libraryDependencies += "com.disneystreaming" %% "weaver-cats" % weaverV % Test,
+    testFrameworks += new TestFramework("weaver.framework.CatsEffect"),
+  )

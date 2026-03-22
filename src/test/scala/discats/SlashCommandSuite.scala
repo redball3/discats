@@ -11,8 +11,10 @@ import weaver.SimpleIOSuite
 
 object InteractionCodecSuite extends SimpleIOSuite:
 
-  private def makeInteraction(name: String, options: List[InteractionOption] = Nil): Interaction =
-    Interaction(
+  private val fakeMember = GuildMember(None, None, Nil, "2021-01-01T00:00:00Z", deaf = false, mute = false)
+
+  private def makeInteraction(name: String, options: List[InteractionOption] = Nil): GuildInteraction =
+    GuildInteraction(
       id            = Snowflake(1L),
       applicationId = Snowflake(2L),
       `type`        = InteractionType.ApplicationCommand,
@@ -25,10 +27,9 @@ object InteractionCodecSuite extends SimpleIOSuite:
         guildId  = None,
         targetId = None,
       )),
-      guildId   = Some(Snowflake(4L)),
+      guildId   = Snowflake(4L),
       channelId = Some(Snowflake(5L)),
-      member    = None,
-      user      = None,
+      member    = fakeMember,
       token     = "test-token",
       version   = 1,
     )
@@ -92,16 +93,16 @@ object InteractionCodecSuite extends SimpleIOSuite:
 
 object SlashCommandRouterSuite extends SimpleIOSuite:
 
-  private def makeInteraction(name: String): Interaction =
-    Interaction(
+  private val fakeUser = User(Snowflake(0L), "testuser", "0000", None, None, None, None)
+
+  private def makeInteraction(name: String): ChannelInteraction =
+    ChannelInteraction(
       id            = Snowflake(100L),
       applicationId = Snowflake(200L),
       `type`        = InteractionType.ApplicationCommand,
       data          = Some(ApplicationCommandData(Snowflake(300L), name, 1, None, None, None, None)),
-      guildId       = None,
       channelId     = None,
-      member        = None,
-      user          = None,
+      user          = fakeUser,
       token         = "tok",
       version       = 1,
     )
