@@ -3,13 +3,16 @@ package discats.rest
 import cats.effect.*
 import cats.syntax.all.*
 import discats.DiscordConfig
-import discats.models.{ApplicationCommand, Channel, Guild, Interaction, InteractionResponse, Message as DiscordMessage, MessageCreate, RegisteredCommand, Snowflake}
+import discats.models.{ApplicationCommand, Channel, Guild, Interaction, InteractionResponse, Message as DiscordMessage, MessageCreate, RegisteredCommand, Snowflake, User}
 import io.circe.*
 import io.circe.syntax.*
 import org.http4s.*
 import org.http4s.circe.*
 import org.http4s.client.Client
 import org.typelevel.ci.CIStringSyntax
+
+import java.net.URLEncoder
+import java.nio.charset.StandardCharsets
 
 /** Algebra for the Discord REST API. */
 trait RestClient[F[_]]:
@@ -27,6 +30,16 @@ trait RestClient[F[_]]:
   // ── Guilds ────────────────────────────────────────────────────────────
   def getGuild(guildId: Snowflake): F[Guild]
   def getGuildChannels(guildId: Snowflake): F[List[Channel]]
+
+  /** Create a text channel in a guild. Requires the Manage Channels permission. */
+  def createGuildChannel(guildId: Snowflake, name: String): F[Channel]
+
+  // ── Users ─────────────────────────────────────────────────────────────
+  def getUser(userId: Snowflake): F[User]
+
+  // ── Reactions ─────────────────────────────────────────────────────────
+  /** Add a reaction to a message as the bot. `emoji` should be the Unicode character or `name:id` for custom emoji. */
+  def addReaction(channelId: Snowflake, messageId: Snowflake, emoji: String): F[Unit]
 
   // ── Application commands ───────────────────────────────────────────────
   /** Register (upsert) a global slash command. Changes take ~1 hour to propagate. */
@@ -141,6 +154,20 @@ object RestClient:
         }
       }
 
+    private def put(path: String): F[Unit] =
+      val bucketKey = path
+      rl(bucketKey) {
+        val req = Request[F](
+          method  = Method.PUT,
+          uri     = Uri.unsafeFromString(s"$base$path"),
+          headers = Headers(authHeader),
+        )
+        client.run(req).use { resp =>
+          rl.updateFromHeaders(bucketKey, resp.headers) >>
+            expectSuccess(resp).void
+        }
+      }
+
     private def delete(path: String): F[Unit] =
       val bucketKey = path
       rl(bucketKey) {
@@ -184,6 +211,19 @@ object RestClient:
 
     def getGuildChannels(guildId: Snowflake): F[List[Channel]] =
       get[List[Channel]](s"/guilds/${guildId.asString}/channels")
+
+    def createGuildChannel(guildId: Snowflake, name: String): F[Channel] =
+      post[Json, Channel](
+        s"/guilds/${guildId.asString}/channels",
+        Json.obj("name" -> name.asJson, "type" -> 0.asJson),
+      )
+
+    def getUser(userId: Snowflake): F[User] =
+      get[User](s"/users/${userId.asString}")
+
+    def addReaction(channelId: Snowflake, messageId: Snowflake, emoji: String): F[Unit] =
+      val encoded = URLEncoder.encode(emoji, StandardCharsets.UTF_8)
+      put(s"/channels/${channelId.asString}/messages/${messageId.asString}/reactions/$encoded/@me")
 
     def registerGlobalCommand(applicationId: Snowflake, command: ApplicationCommand): F[RegisteredCommand] =
       post[ApplicationCommand, RegisteredCommand](s"/applications/${applicationId.asString}/commands", command)
