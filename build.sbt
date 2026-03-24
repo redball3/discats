@@ -5,7 +5,9 @@ val weaverV  = "0.8.4"
 
 ThisBuild / scalaVersion := "3.3.4"
 ThisBuild / organization := "io.github.discats"
-ThisBuild / version      := "0.1.0-SNAPSHOT"
+// Version is derived automatically from git tags by sbt-dynver.
+// Tag a release as v0.2.0 on GitHub and this becomes 0.2.0.
+ThisBuild / dynverSonatypeSnapshots := true
 
 // Publishing
 ThisBuild / homepage := Some(url("https://github.com/redball3/discats"))
