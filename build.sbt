@@ -5,8 +5,19 @@ val weaverV  = "0.8.4"
 
 ThisBuild / scalaVersion := "3.3.4"
 ThisBuild / organization := "io.github.discats"
-// Version is derived automatically from git tags by sbt-dynver.
-// Tag a release as v0.2.0 on GitHub and this becomes 0.2.0.
+// In CI (GitHub Actions sets CI=true), sbt-dynver derives the version from the
+// current git tag (e.g. v0.2.0 → 0.2.0) or produces a snapshot like
+// 0.2.0+3-abc1234-SNAPSHOT between tags.
+// Locally, a fixed snapshot is used so publishLocal produces a stable,
+// human-readable coordinate.
+ThisBuild / version := {
+  if (sys.env.contains("CI")) {
+    val out  = (ThisBuild / dynverGitDescribeOutput).value
+    val date = (ThisBuild / dynverCurrentDate).value
+    if ((ThisBuild / dynverSonatypeSnapshots).value) out.sonatypeVersion(date)
+    else out.version(date)
+  } else "0.1.0-local-SNAPSHOT"
+}
 ThisBuild / dynverSonatypeSnapshots := true
 
 // Publishing
