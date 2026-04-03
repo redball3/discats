@@ -151,6 +151,7 @@ class StubRestClient(called: Ref[IO, Boolean]) extends discats.rest.RestClient[I
   def getGuild(guildId: Snowflake): IO[Guild]                                                    = IO.raiseError(notImpl)
   def getGuildChannels(guildId: Snowflake): IO[List[Channel]]                                    = IO.raiseError(notImpl)
   def createGuildChannel(guildId: Snowflake, name: String): IO[Channel]                         = IO.raiseError(notImpl)
+  def createGuildChannelWithOverwrites(guildId: Snowflake, name: String, overwrites: List[PermissionOverwrite]): IO[Channel] = IO.raiseError(notImpl)
   def getUser(userId: Snowflake): IO[User]                                                       = IO.raiseError(notImpl)
   def addReaction(channelId: Snowflake, messageId: Snowflake, emoji: String): IO[Unit]           = IO.raiseError(notImpl)
   def registerGlobalCommand(appId: Snowflake, cmd: ApplicationCommand): IO[RegisteredCommand]   = IO.raiseError(notImpl)

@@ -38,3 +38,21 @@ object Channel:
   private given Configuration = Configuration.default.withSnakeCaseMemberNames
   given Decoder[Channel] = ConfiguredDecoder.derived
   given Encoder[Channel] = ConfiguredEncoder.derived
+
+/** A permission overwrite for a channel.
+  *
+  * @param id   The role or user Snowflake ID.
+  * @param `type` 0 = role, 1 = member.
+  * @param allow Permission bits to allow, as a decimal string.
+  * @param deny  Permission bits to deny, as a decimal string.
+  */
+final case class PermissionOverwrite(
+    id: String,
+    `type`: Int,
+    allow: String,
+    deny: String,
+)
+
+object PermissionOverwrite:
+  given Encoder[PermissionOverwrite] =
+    Encoder.forProduct4("id", "type", "allow", "deny")(o => (o.id, o.`type`, o.allow, o.deny))

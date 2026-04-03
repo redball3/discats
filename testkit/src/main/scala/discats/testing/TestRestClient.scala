@@ -62,6 +62,22 @@ final class TestRestClient[F[_]] private (state: Ref[F, TestRestClient.State[F]]
   def stubGetGuildChannels(f: Snowflake => F[List[Channel]]): F[Unit] =
     state.update(_.copy(getGuildChannelsFn = Some(f)))
 
+  /** Configure the response for [[createGuildChannel]]. */
+  def stubCreateGuildChannel(f: (Snowflake, String) => F[Channel]): F[Unit] =
+    state.update(_.copy(createGuildChannelFn = Some(f)))
+
+  /** Configure the response for [[createGuildChannelWithOverwrites]]. */
+  def stubCreateGuildChannelWithOverwrites(f: (Snowflake, String, List[PermissionOverwrite]) => F[Channel]): F[Unit] =
+    state.update(_.copy(createGuildChannelWithOverwritesFn = Some(f)))
+
+  /** Configure the response for [[getUser]]. */
+  def stubGetUser(f: Snowflake => F[User]): F[Unit] =
+    state.update(_.copy(getUserFn = Some(f)))
+
+  /** Configure the response for [[addReaction]]. */
+  def stubAddReaction(f: (Snowflake, Snowflake, String) => F[Unit]): F[Unit] =
+    state.update(_.copy(addReactionFn = Some(f)))
+
   /** Configure the response for [[registerGlobalCommand]]. */
   def stubRegisterGlobalCommand(f: (Snowflake, ApplicationCommand) => F[RegisteredCommand]): F[Unit] =
     state.update(_.copy(registerGlobalCommandFn = Some(f)))
@@ -118,6 +134,18 @@ final class TestRestClient[F[_]] private (state: Ref[F, TestRestClient.State[F]]
   def registeredCommands: F[List[ApplicationCommand]] =
     state.get.map(_.registeredCommands)
 
+  /** All `(guildId, name)` pairs passed to [[createGuildChannel]], in call order. */
+  def createdChannels: F[List[(Snowflake, String)]] =
+    state.get.map(_.createdChannels)
+
+  /** All `(guildId, name, overwrites)` triples passed to [[createGuildChannelWithOverwrites]], in call order. */
+  def createdPrivateChannels: F[List[(Snowflake, String, List[PermissionOverwrite])]] =
+    state.get.map(_.createdPrivateChannels)
+
+  /** All `(channelId, messageId, emoji)` triples passed to [[addReaction]], in call order. */
+  def addedReactions: F[List[(Snowflake, Snowflake, String)]] =
+    state.get.map(_.addedReactions)
+
   /** Reset all recorded calls and remove all configured stubs, returning to a clean state. */
   def reset: F[Unit] = state.set(TestRestClient.State())
 
@@ -155,6 +183,31 @@ final class TestRestClient[F[_]] private (state: Ref[F, TestRestClient.State[F]]
 
   def getGuildChannels(guildId: Snowflake): F[List[Channel]] =
     state.get.flatMap(_.getGuildChannelsFn.fold(notStubbed("getGuildChannels"))(_(guildId)))
+
+  def createGuildChannel(guildId: Snowflake, name: String): F[Channel] =
+    state.flatModify { s =>
+      val next = s.copy(createdChannels = s.createdChannels :+ (guildId, name))
+      next -> s.createGuildChannelFn.fold(notStubbed("createGuildChannel"))(_(guildId, name))
+    }
+
+  def createGuildChannelWithOverwrites(
+      guildId: Snowflake,
+      name: String,
+      overwrites: List[PermissionOverwrite],
+  ): F[Channel] =
+    state.flatModify { s =>
+      val next = s.copy(createdPrivateChannels = s.createdPrivateChannels :+ (guildId, name, overwrites))
+      next -> s.createGuildChannelWithOverwritesFn.fold(notStubbed("createGuildChannelWithOverwrites"))(_(guildId, name, overwrites))
+    }
+
+  def getUser(userId: Snowflake): F[User] =
+    state.get.flatMap(_.getUserFn.fold(notStubbed("getUser"))(_(userId)))
+
+  def addReaction(channelId: Snowflake, messageId: Snowflake, emoji: String): F[Unit] =
+    state.flatModify { s =>
+      val next = s.copy(addedReactions = s.addedReactions :+ (channelId, messageId, emoji))
+      next -> s.addReactionFn.fold(notStubbed("addReaction"))(_(channelId, messageId, emoji))
+    }
 
   def registerGlobalCommand(applicationId: Snowflake, command: ApplicationCommand): F[RegisteredCommand] =
     state.flatModify { s =>
@@ -201,6 +254,10 @@ object TestRestClient:
     editMessageFn:               Option[(Snowflake, Snowflake, MessageCreate) => F[Message]]                   = None,
     getGuildFn:                  Option[Snowflake => F[Guild]]                                                 = None,
     getGuildChannelsFn:          Option[Snowflake => F[List[Channel]]]                                         = None,
+    createGuildChannelFn:        Option[(Snowflake, String) => F[Channel]]                                     = None,
+    createGuildChannelWithOverwritesFn: Option[(Snowflake, String, List[PermissionOverwrite]) => F[Channel]]   = None,
+    getUserFn:                   Option[Snowflake => F[User]]                                                  = None,
+    addReactionFn:               Option[(Snowflake, Snowflake, String) => F[Unit]]                             = None,
     registerGlobalCommandFn:     Option[(Snowflake, ApplicationCommand) => F[RegisteredCommand]]               = None,
     registerGuildCommandFn:      Option[(Snowflake, Snowflake, ApplicationCommand) => F[RegisteredCommand]]    = None,
     listGlobalCommandsFn:        Option[Snowflake => F[List[RegisteredCommand]]]                               = None,
@@ -214,6 +271,9 @@ object TestRestClient:
     interactionResponses:  List[(Snowflake, String, InteractionResponse)]     = Nil,
     deletedMessages:       List[(Snowflake, Snowflake)]                       = Nil,
     registeredCommands:    List[ApplicationCommand]                           = Nil,
+    createdChannels:       List[(Snowflake, String)]                          = Nil,
+    createdPrivateChannels: List[(Snowflake, String, List[PermissionOverwrite])] = Nil,
+    addedReactions:        List[(Snowflake, Snowflake, String)]               = Nil,
   )
 
   /** Create a fresh [[TestRestClient]] with no stubs configured. */

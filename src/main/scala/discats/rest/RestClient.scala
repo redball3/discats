@@ -3,7 +3,7 @@ package discats.rest
 import cats.effect.*
 import cats.syntax.all.*
 import discats.DiscordConfig
-import discats.models.{ApplicationCommand, Channel, Guild, Interaction, InteractionResponse, Message as DiscordMessage, MessageCreate, RegisteredCommand, Snowflake, User}
+import discats.models.{ApplicationCommand, Channel, Guild, Interaction, InteractionResponse, Message as DiscordMessage, MessageCreate, PermissionOverwrite, RegisteredCommand, Snowflake, User}
 import io.circe.*
 import io.circe.syntax.*
 import org.http4s.*
@@ -33,6 +33,17 @@ trait RestClient[F[_]]:
 
   /** Create a text channel in a guild. Requires the Manage Channels permission. */
   def createGuildChannel(guildId: Snowflake, name: String): F[Channel]
+
+  /** Create a text channel with permission overwrites.
+    *
+    * Use [[PermissionOverwrite]] entries to restrict or grant access per role/member.
+    * Requires the Manage Channels permission.
+    */
+  def createGuildChannelWithOverwrites(
+      guildId: Snowflake,
+      name: String,
+      overwrites: List[PermissionOverwrite],
+  ): F[Channel]
 
   // ── Users ─────────────────────────────────────────────────────────────
   def getUser(userId: Snowflake): F[User]
@@ -216,6 +227,20 @@ object RestClient:
       post[Json, Channel](
         s"/guilds/${guildId.asString}/channels",
         Json.obj("name" -> name.asJson, "type" -> 0.asJson),
+      )
+
+    def createGuildChannelWithOverwrites(
+        guildId: Snowflake,
+        name: String,
+        overwrites: List[PermissionOverwrite],
+    ): F[Channel] =
+      post[Json, Channel](
+        s"/guilds/${guildId.asString}/channels",
+        Json.obj(
+          "name"                  -> name.asJson,
+          "type"                  -> 0.asJson,
+          "permission_overwrites" -> overwrites.asJson,
+        ),
       )
 
     def getUser(userId: Snowflake): F[User] =

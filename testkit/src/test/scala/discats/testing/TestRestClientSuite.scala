@@ -174,6 +174,112 @@ object TestRestClientSuite extends SimpleIOSuite:
     yield expect(ch == fakeChannel)
   }
 
+  // ── createGuildChannel ────────────────────────────────────────────────────
+
+  test("stubCreateGuildChannel returns configured channel") {
+    val guildId = Snowflake(10L)
+    for
+      client <- TestRestClient.create[IO]
+      _      <- client.stubCreateGuildChannel((_, _) => IO.pure(fakeChannel))
+      ch     <- client.createGuildChannel(guildId, "general")
+    yield expect(ch == fakeChannel)
+  }
+
+  test("createGuildChannel records (guildId, name) pairs in order") {
+    val guildId = Snowflake(10L)
+    for
+      client <- TestRestClient.create[IO]
+      _      <- client.stubCreateGuildChannel((_, _) => IO.pure(fakeChannel))
+      _      <- client.createGuildChannel(guildId, "alpha")
+      _      <- client.createGuildChannel(guildId, "beta")
+      calls  <- client.createdChannels
+    yield expect(calls == List((guildId, "alpha"), (guildId, "beta")))
+  }
+
+  test("unstubbed createGuildChannel raises NotStubbedException") {
+    for
+      client <- TestRestClient.create[IO]
+      result <- client.createGuildChannel(Snowflake(1L), "oops").attempt
+    yield expect(result.left.exists(_.isInstanceOf[NotStubbedException]))
+  }
+
+  // ── createGuildChannelWithOverwrites ──────────────────────────────────────
+
+  test("stubCreateGuildChannelWithOverwrites returns configured channel") {
+    val guildId   = Snowflake(20L)
+    val overwrite = PermissionOverwrite(id = "99", `type` = 0, allow = "8", deny = "0")
+    for
+      client <- TestRestClient.create[IO]
+      _      <- client.stubCreateGuildChannelWithOverwrites((_, _, _) => IO.pure(fakeChannel))
+      ch     <- client.createGuildChannelWithOverwrites(guildId, "secret", List(overwrite))
+    yield expect(ch == fakeChannel)
+  }
+
+  test("createGuildChannelWithOverwrites records (guildId, name, overwrites) triples") {
+    val guildId   = Snowflake(20L)
+    val overwrite = PermissionOverwrite(id = "99", `type` = 0, allow = "8", deny = "0")
+    for
+      client <- TestRestClient.create[IO]
+      _      <- client.stubCreateGuildChannelWithOverwrites((_, _, _) => IO.pure(fakeChannel))
+      _      <- client.createGuildChannelWithOverwrites(guildId, "secret", List(overwrite))
+      calls  <- client.createdPrivateChannels
+    yield expect(calls == List((guildId, "secret", List(overwrite))))
+  }
+
+  test("unstubbed createGuildChannelWithOverwrites raises NotStubbedException") {
+    for
+      client <- TestRestClient.create[IO]
+      result <- client.createGuildChannelWithOverwrites(Snowflake(1L), "x", Nil).attempt
+    yield expect(result.left.exists(_.isInstanceOf[NotStubbedException]))
+  }
+
+  // ── getUser ───────────────────────────────────────────────────────────────
+
+  test("stubGetUser returns configured user") {
+    for
+      client <- TestRestClient.create[IO]
+      _      <- client.stubGetUser(_ => IO.pure(fakeUser))
+      u      <- client.getUser(Snowflake(1L))
+    yield expect(u == fakeUser)
+  }
+
+  test("unstubbed getUser raises NotStubbedException") {
+    for
+      client <- TestRestClient.create[IO]
+      result <- client.getUser(Snowflake(1L)).attempt
+    yield expect(result.left.exists(_.isInstanceOf[NotStubbedException]))
+  }
+
+  // ── addReaction ───────────────────────────────────────────────────────────
+
+  test("stubAddReaction completes successfully") {
+    val msgId = Snowflake(55L)
+    for
+      client <- TestRestClient.create[IO]
+      _      <- client.stubAddReaction((_, _, _) => IO.unit)
+      _      <- client.addReaction(channelId, msgId, "👍")
+    yield success
+  }
+
+  test("addReaction records (channelId, messageId, emoji) triples in order") {
+    val msgId1 = Snowflake(55L)
+    val msgId2 = Snowflake(56L)
+    for
+      client <- TestRestClient.create[IO]
+      _      <- client.stubAddReaction((_, _, _) => IO.unit)
+      _      <- client.addReaction(channelId, msgId1, "👍")
+      _      <- client.addReaction(channelId, msgId2, "✅")
+      calls  <- client.addedReactions
+    yield expect(calls == List((channelId, msgId1, "👍"), (channelId, msgId2, "✅")))
+  }
+
+  test("unstubbed addReaction raises NotStubbedException") {
+    for
+      client <- TestRestClient.create[IO]
+      result <- client.addReaction(Snowflake(1L), Snowflake(2L), "👍").attempt
+    yield expect(result.left.exists(_.isInstanceOf[NotStubbedException]))
+  }
+
   // ── reset ─────────────────────────────────────────────────────────────────
 
   test("reset clears all recorded calls") {

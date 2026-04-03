@@ -111,3 +111,18 @@ object ModelCodecSuite extends SimpleIOSuite:
     val enc = mc.asJson
     expect((enc \\ "content").headOption == Some(Json.fromString("hello!")))
   }
+
+  pureTest("PermissionOverwrite encodes with correct field names") {
+    val ow  = PermissionOverwrite(id = "123", `type` = 0, allow = "8", deny = "0")
+    val enc = ow.asJson
+    expect((enc \\ "id").headOption == Some(Json.fromString("123"))) and
+      expect((enc \\ "type").headOption == Some(Json.fromInt(0))) and
+      expect((enc \\ "allow").headOption == Some(Json.fromString("8"))) and
+      expect((enc \\ "deny").headOption == Some(Json.fromString("0")))
+  }
+
+  pureTest("PermissionOverwrite member type encodes as 1") {
+    val ow  = PermissionOverwrite(id = "456", `type` = 1, allow = "0", deny = "4")
+    val enc = ow.asJson
+    expect((enc \\ "type").headOption == Some(Json.fromInt(1)))
+  }
