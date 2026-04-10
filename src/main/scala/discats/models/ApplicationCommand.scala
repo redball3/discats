@@ -73,6 +73,9 @@ final case class ApplicationCommand(
 
   def user(name: String, description: String, required: Boolean = false): ApplicationCommand =
     withOption(CommandOption(CommandOptionType.User, name, description, required = Some(required)))
+
+  def attachment(name: String, description: String, required: Boolean = false): ApplicationCommand =
+    withOption(CommandOption(CommandOptionType.Attachment, name, description, required = Some(required)))
 }
 
 object ApplicationCommand:

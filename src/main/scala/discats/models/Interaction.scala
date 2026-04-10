@@ -32,16 +32,44 @@ object InteractionOption:
   given Decoder[InteractionOption] = deriveDecoder
   given Encoder[InteractionOption] = deriveEncoder
 
-/** Resolved entities referenced by options (users, members, channels, roles). */
+/** A Discord attachment, as returned in resolved interaction data. */
+final case class Attachment(
+    id: Snowflake,
+    filename: String,
+    url: String,
+    proxyUrl: String,
+    size: Int,
+    contentType: Option[String] = None,
+)
+
+object Attachment:
+  private given Configuration = Configuration.default.withSnakeCaseMemberNames
+  given Decoder[Attachment] = ConfiguredDecoder.derived
+  given Encoder[Attachment] = ConfiguredEncoder.derived
+
+/** Resolved entities referenced by options (users, members, channels, roles, attachments). */
 final case class ResolvedData(
     users: Option[Map[String, User]],
     members: Option[Map[String, GuildMember]],
     channels: Option[Map[String, Channel]],
+    attachments: Option[Map[String, Attachment]] = None,
 )
 
 object ResolvedData:
   given Decoder[ResolvedData] = deriveDecoder
   given Encoder[ResolvedData] = deriveEncoder
+
+/** Data payload for a MessageComponent interaction (button click, select menu choice, etc.). */
+final case class MessageComponentData(
+    customId: String,
+    componentType: Int,
+    values: Option[List[String]],
+)
+
+object MessageComponentData:
+  private given Configuration = Configuration.default.withSnakeCaseMemberNames
+  given Decoder[MessageComponentData] = ConfiguredDecoder.derived
+  given Encoder[MessageComponentData] = ConfiguredEncoder.derived
 
 /** Data payload for an ApplicationCommand interaction. */
 final case class ApplicationCommandData(
@@ -74,6 +102,7 @@ sealed trait Interaction:
   def applicationId: Snowflake
   def `type`: InteractionType
   def data: Option[ApplicationCommandData]
+  def componentData: Option[MessageComponentData]
   def channelId: Option[Snowflake]
   def token: String
   def version: Int
@@ -93,6 +122,21 @@ sealed trait Interaction:
   /** Look up a boolean option by name. */
   def boolOption(name: String): Option[Boolean] =
     data.flatMap(_.options).flatMap(_.find(_.name == name)).flatMap(_.value).flatMap(_.asBoolean)
+
+  /** Look up an attachment option by name, returning the resolved [[Attachment]]. */
+  def attachmentOption(name: String): Option[Attachment] =
+    for
+      attachmentId <- data.flatMap(_.options).flatMap(_.find(_.name == name)).flatMap(_.value).flatMap(_.asString)
+      resolved     <- data.flatMap(_.resolved)
+      attachments  <- resolved.attachments
+      attachment   <- attachments.get(attachmentId)
+    yield attachment
+
+  /** The custom_id of a MessageComponent interaction. */
+  def componentCustomId: Option[String] = componentData.map(_.customId)
+
+  /** The selected values of a MessageComponent select menu interaction. */
+  def componentValues: Option[List[String]] = componentData.flatMap(_.values)
 
 object Interaction:
   /** Decodes as [[GuildInteraction]] when `guild_id` is present, otherwise [[ChannelInteraction]]. */
@@ -122,14 +166,47 @@ final case class GuildInteraction(
     member: GuildMember,
     token: String,
     version: Int,
+    componentData: Option[MessageComponentData] = None,
 ) extends Interaction:
   /** The guild member who triggered this interaction. May be absent for bots. */
   def invoker: Option[User] = member.user
 
 object GuildInteraction:
-  private given Configuration = Configuration.default.withSnakeCaseMemberNames
-  given Decoder[GuildInteraction] = ConfiguredDecoder.derived
-  given Encoder[GuildInteraction] = ConfiguredEncoder.derived
+  given Decoder[GuildInteraction] = (c: HCursor) =>
+    for
+      id            <- c.downField("id").as[Snowflake]
+      applicationId <- c.downField("application_id").as[Snowflake]
+      interType     <- c.downField("type").as[InteractionType]
+      guildId       <- c.downField("guild_id").as[Snowflake]
+      channelId     <- c.downField("channel_id").as[Option[Snowflake]]
+      member        <- c.downField("member").as[GuildMember]
+      token         <- c.downField("token").as[String]
+      version       <- c.downField("version").as[Int]
+      commandData   <- {
+                        if interType == InteractionType.ApplicationCommand then
+                          c.downField("data").as[Option[ApplicationCommandData]]
+                        else Right(None)
+                      }
+      componentData <- {
+                        if interType == InteractionType.MessageComponent then
+                          c.downField("data").as[Option[MessageComponentData]]
+                        else Right(None)
+                      }
+    yield GuildInteraction(id, applicationId, interType, commandData, guildId, channelId, member, token, version, componentData)
+
+  given Encoder[GuildInteraction] = (g: GuildInteraction) =>
+    val dataJson = g.data.map(_.asJson).orElse(g.componentData.map(_.asJson))
+    Json.obj(
+      "id"             -> g.id.asJson,
+      "application_id" -> g.applicationId.asJson,
+      "type"           -> g.`type`.asJson,
+      "data"           -> dataJson.getOrElse(Json.Null),
+      "guild_id"       -> g.guildId.asJson,
+      "channel_id"     -> g.channelId.asJson,
+      "member"         -> g.member.asJson,
+      "token"          -> g.token.asJson,
+      "version"        -> g.version.asJson,
+    )
 
 /** An interaction triggered outside a guild (DM or group DM).
   *
@@ -145,14 +222,45 @@ final case class ChannelInteraction(
     user: User,
     token: String,
     version: Int,
+    componentData: Option[MessageComponentData] = None,
 ) extends Interaction:
   /** The user who triggered this interaction. */
   def invoker: User = user
 
 object ChannelInteraction:
-  private given Configuration = Configuration.default.withSnakeCaseMemberNames
-  given Decoder[ChannelInteraction] = ConfiguredDecoder.derived
-  given Encoder[ChannelInteraction] = ConfiguredEncoder.derived
+  given Decoder[ChannelInteraction] = (c: HCursor) =>
+    for
+      id            <- c.downField("id").as[Snowflake]
+      applicationId <- c.downField("application_id").as[Snowflake]
+      interType     <- c.downField("type").as[InteractionType]
+      channelId     <- c.downField("channel_id").as[Option[Snowflake]]
+      user          <- c.downField("user").as[User]
+      token         <- c.downField("token").as[String]
+      version       <- c.downField("version").as[Int]
+      commandData   <- {
+                        if interType == InteractionType.ApplicationCommand then
+                          c.downField("data").as[Option[ApplicationCommandData]]
+                        else Right(None)
+                      }
+      componentData <- {
+                        if interType == InteractionType.MessageComponent then
+                          c.downField("data").as[Option[MessageComponentData]]
+                        else Right(None)
+                      }
+    yield ChannelInteraction(id, applicationId, interType, commandData, channelId, user, token, version, componentData)
+
+  given Encoder[ChannelInteraction] = (c: ChannelInteraction) =>
+    val dataJson = c.data.map(_.asJson).orElse(c.componentData.map(_.asJson))
+    Json.obj(
+      "id"             -> c.id.asJson,
+      "application_id" -> c.applicationId.asJson,
+      "type"           -> c.`type`.asJson,
+      "data"           -> dataJson.getOrElse(Json.Null),
+      "channel_id"     -> c.channelId.asJson,
+      "user"           -> c.user.asJson,
+      "token"          -> c.token.asJson,
+      "version"        -> c.version.asJson,
+    )
 
 // ── Interaction Responses ────────────────────────────────────────────────────
 
@@ -180,17 +288,29 @@ final case class InteractionCallbackData(
     embeds: Option[List[Embed]] = None,
     flags: Option[Int] = None,
     tts: Option[Boolean] = None,
+    components: Option[List[ActionRow]] = None,
 ) {
   def asEphemeral: InteractionCallbackData = copy(flags = Some(flags.getOrElse(0) | MessageFlags.Ephemeral))
 }
 
 object InteractionCallbackData:
-  given Encoder[InteractionCallbackData] = deriveEncoder
+  given Encoder[InteractionCallbackData] = (d: InteractionCallbackData) =>
+    Json.obj(
+      "content"    -> d.content.fold(Json.Null)(Json.fromString),
+      "embeds"     -> d.embeds.fold(Json.Null)(_.asJson),
+      "flags"      -> d.flags.fold(Json.Null)(Json.fromInt),
+      "tts"        -> d.tts.fold(Json.Null)(Json.fromBoolean),
+      "components" -> d.components.fold(Json.Null)(_.asJson),
+    ).dropNullValues
+
   given Decoder[InteractionCallbackData] = deriveDecoder
 
   def text(content: String): InteractionCallbackData                     = InteractionCallbackData(content = Some(content))
   def ephemeral(content: String): InteractionCallbackData                = text(content).asEphemeral
   def withEmbeds(embeds: List[Embed]): InteractionCallbackData           = InteractionCallbackData(embeds = Some(embeds))
+  def withSelectMenu(menu: StringSelectMenu): InteractionCallbackData    = InteractionCallbackData(components = Some(List(ActionRow(menu))))
+  def withSelectMenu(content: String, menu: StringSelectMenu): InteractionCallbackData =
+    InteractionCallbackData(content = Some(content), components = Some(List(ActionRow(menu))))
 
 /** A full interaction response (type + optional data). */
 final case class InteractionResponse(
@@ -216,3 +336,15 @@ object InteractionResponse:
 
   def withEmbeds(embeds: List[Embed]): InteractionResponse =
     InteractionResponse(InteractionCallbackType.ChannelMessageWithSource, Some(InteractionCallbackData.withEmbeds(embeds)))
+
+  def replyWithSelectMenu(menu: StringSelectMenu): InteractionResponse =
+    InteractionResponse(
+      InteractionCallbackType.ChannelMessageWithSource,
+      Some(InteractionCallbackData.withSelectMenu(menu).asEphemeral),
+    )
+
+  def replyWithSelectMenu(content: String, menu: StringSelectMenu): InteractionResponse =
+    InteractionResponse(
+      InteractionCallbackType.ChannelMessageWithSource,
+      Some(InteractionCallbackData.withSelectMenu(content, menu).asEphemeral),
+    )
