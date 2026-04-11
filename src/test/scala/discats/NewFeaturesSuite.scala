@@ -326,6 +326,7 @@ class ComponentStubRestClient(called: Ref[IO, Boolean]) extends discats.rest.Res
   def respondToInteraction(id: Snowflake, token: String, r: InteractionResponse): IO[Unit] =
     called.set(true)
   def getChannel(channelId: Snowflake): IO[Channel]                                              = IO.raiseError(notImpl)
+  def deleteChannel(channelId: Snowflake): IO[Unit]                                              = IO.raiseError(notImpl)
   def getMessage(channelId: Snowflake, messageId: Snowflake): IO[discats.models.Message]         = IO.raiseError(notImpl)
   def getMessages(channelId: Snowflake, limit: Int): IO[List[discats.models.Message]]            = IO.raiseError(notImpl)
   def sendMessage(channelId: Snowflake, body: MessageCreate): IO[discats.models.Message]         = IO.raiseError(notImpl)
@@ -334,7 +335,8 @@ class ComponentStubRestClient(called: Ref[IO, Boolean]) extends discats.rest.Res
   def getGuild(guildId: Snowflake): IO[Guild]                                                    = IO.raiseError(notImpl)
   def getGuildChannels(guildId: Snowflake): IO[List[Channel]]                                    = IO.raiseError(notImpl)
   def createGuildChannel(guildId: Snowflake, name: String): IO[Channel]                         = IO.raiseError(notImpl)
-  def createGuildChannelWithOverwrites(guildId: Snowflake, name: String, overwrites: List[PermissionOverwrite]): IO[Channel] = IO.raiseError(notImpl)
+  def createGuildChannelWithOverwrites(guildId: Snowflake, name: String, overwrites: List[PermissionOverwrite], parentId: Option[Snowflake]): IO[Channel] = IO.raiseError(notImpl)
+  def createGuildCategory(guildId: Snowflake, name: String): IO[Channel]                        = IO.raiseError(notImpl)
   def getUser(userId: Snowflake): IO[User]                                                       = IO.raiseError(notImpl)
   def addReaction(channelId: Snowflake, messageId: Snowflake, emoji: String): IO[Unit]           = IO.raiseError(notImpl)
   def registerGlobalCommand(appId: Snowflake, cmd: ApplicationCommand): IO[RegisteredCommand]   = IO.raiseError(notImpl)

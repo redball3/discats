@@ -183,3 +183,21 @@ object RestClientSuite extends SimpleIOSuite:
       body <- capturedBody.get
     yield expect((body \\ "permission_overwrites").headOption == Some(Json.arr()))
   }
+
+  test("createGuildCategory sends category type in body") {
+    val guildId = Snowflake(55L)
+    val channelJson = Json.obj(
+      "id" -> "9".asJson, "type" -> 4.asJson, "guild_id" -> "55".asJson,
+      "name" -> "bingo".asJson, "topic" -> Json.Null, "nsfw" -> false.asJson,
+      "last_message_id" -> Json.Null, "position" -> 0.asJson, "parent_id" -> Json.Null,
+    )
+    for
+      capturedBody <- IO.ref(Json.Null)
+      client <- makeClient { req =>
+        req.as[Json].flatMap(b => capturedBody.set(b) >> jsonResp(channelJson))
+      }
+      _    <- client.createGuildCategory(guildId, "bingo")
+      body <- capturedBody.get
+    yield expect((body \\ "name").headOption == Some(Json.fromString("bingo"))) and
+      expect((body \\ "type").headOption == Some(Json.fromInt(4)))
+  }

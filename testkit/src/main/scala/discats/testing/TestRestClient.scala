@@ -34,6 +34,10 @@ final class TestRestClient[F[_]] private (state: Ref[F, TestRestClient.State[F]]
   def stubGetChannel(f: Snowflake => F[Channel]): F[Unit] =
     state.update(_.copy(getChannelFn = Some(f)))
 
+  /** Configure the response for [[deleteChannel]]. */
+  def stubDeleteChannel(f: Snowflake => F[Unit]): F[Unit] =
+    state.update(_.copy(deleteChannelFn = Some(f)))
+
   /** Configure the response for [[getMessage]]. */
   def stubGetMessage(f: (Snowflake, Snowflake) => F[Message]): F[Unit] =
     state.update(_.copy(getMessageFn = Some(f)))
@@ -67,8 +71,12 @@ final class TestRestClient[F[_]] private (state: Ref[F, TestRestClient.State[F]]
     state.update(_.copy(createGuildChannelFn = Some(f)))
 
   /** Configure the response for [[createGuildChannelWithOverwrites]]. */
-  def stubCreateGuildChannelWithOverwrites(f: (Snowflake, String, List[PermissionOverwrite]) => F[Channel]): F[Unit] =
+  def stubCreateGuildChannelWithOverwrites(f: (Snowflake, String, List[PermissionOverwrite], Option[Snowflake]) => F[Channel]): F[Unit] =
     state.update(_.copy(createGuildChannelWithOverwritesFn = Some(f)))
+
+  /** Configure the response for [[createGuildCategory]]. */
+  def stubCreateGuildCategory(f: (Snowflake, String) => F[Channel]): F[Unit] =
+    state.update(_.copy(createGuildCategoryFn = Some(f)))
 
   /** Configure the response for [[getUser]]. */
   def stubGetUser(f: Snowflake => F[User]): F[Unit] =
@@ -130,6 +138,10 @@ final class TestRestClient[F[_]] private (state: Ref[F, TestRestClient.State[F]]
   def deletedMessages: F[List[(Snowflake, Snowflake)]] =
     state.get.map(_.deletedMessages)
 
+  /** All channel IDs passed to [[deleteChannel]], in call order. */
+  def deletedChannels: F[List[Snowflake]] =
+    state.get.map(_.deletedChannels)
+
   /** All commands passed to [[registerGlobalCommand]] or [[registerGuildCommand]], in call order. */
   def registeredCommands: F[List[ApplicationCommand]] =
     state.get.map(_.registeredCommands)
@@ -138,8 +150,12 @@ final class TestRestClient[F[_]] private (state: Ref[F, TestRestClient.State[F]]
   def createdChannels: F[List[(Snowflake, String)]] =
     state.get.map(_.createdChannels)
 
-  /** All `(guildId, name, overwrites)` triples passed to [[createGuildChannelWithOverwrites]], in call order. */
-  def createdPrivateChannels: F[List[(Snowflake, String, List[PermissionOverwrite])]] =
+  /** All `(guildId, name)` pairs passed to [[createGuildCategory]], in call order. */
+  def createdCategories: F[List[(Snowflake, String)]] =
+    state.get.map(_.createdCategories)
+
+  /** All `(guildId, name, overwrites, parentId)` calls passed to [[createGuildChannelWithOverwrites]], in call order. */
+  def createdPrivateChannels: F[List[(Snowflake, String, List[PermissionOverwrite], Option[Snowflake])]] =
     state.get.map(_.createdPrivateChannels)
 
   /** All `(channelId, messageId, emoji)` triples passed to [[addReaction]], in call order. */
@@ -156,6 +172,12 @@ final class TestRestClient[F[_]] private (state: Ref[F, TestRestClient.State[F]]
 
   def getChannel(channelId: Snowflake): F[Channel] =
     state.get.flatMap(_.getChannelFn.fold(notStubbed("getChannel"))(_(channelId)))
+
+  def deleteChannel(channelId: Snowflake): F[Unit] =
+    state.flatModify { s =>
+      val next = s.copy(deletedChannels = s.deletedChannels :+ channelId)
+      next -> s.deleteChannelFn.fold(notStubbed("deleteChannel"))(_(channelId))
+    }
 
   def getMessage(channelId: Snowflake, messageId: Snowflake): F[Message] =
     state.get.flatMap(_.getMessageFn.fold(notStubbed("getMessage"))(_(channelId, messageId)))
@@ -194,10 +216,17 @@ final class TestRestClient[F[_]] private (state: Ref[F, TestRestClient.State[F]]
       guildId: Snowflake,
       name: String,
       overwrites: List[PermissionOverwrite],
+      parentId: Option[Snowflake],
   ): F[Channel] =
     state.flatModify { s =>
-      val next = s.copy(createdPrivateChannels = s.createdPrivateChannels :+ (guildId, name, overwrites))
-      next -> s.createGuildChannelWithOverwritesFn.fold(notStubbed("createGuildChannelWithOverwrites"))(_(guildId, name, overwrites))
+      val next = s.copy(createdPrivateChannels = s.createdPrivateChannels :+ (guildId, name, overwrites, parentId))
+      next -> s.createGuildChannelWithOverwritesFn.fold(notStubbed("createGuildChannelWithOverwrites"))(_(guildId, name, overwrites, parentId))
+    }
+
+  def createGuildCategory(guildId: Snowflake, name: String): F[Channel] =
+    state.flatModify { s =>
+      val next = s.copy(createdCategories = s.createdCategories :+ (guildId, name))
+      next -> s.createGuildCategoryFn.fold(notStubbed("createGuildCategory"))(_(guildId, name))
     }
 
   def getUser(userId: Snowflake): F[User] =
@@ -247,6 +276,7 @@ object TestRestClient:
   private[testing] case class State[F[_]](
     // stubs
     getChannelFn:                Option[Snowflake => F[Channel]]                                               = None,
+    deleteChannelFn:             Option[Snowflake => F[Unit]]                                                  = None,
     getMessageFn:                Option[(Snowflake, Snowflake) => F[Message]]                                  = None,
     getMessagesFn:               Option[(Snowflake, Int) => F[List[Message]]]                                  = None,
     sendMessageFn:               Option[(Snowflake, MessageCreate) => F[Message]]                              = None,
@@ -255,7 +285,8 @@ object TestRestClient:
     getGuildFn:                  Option[Snowflake => F[Guild]]                                                 = None,
     getGuildChannelsFn:          Option[Snowflake => F[List[Channel]]]                                         = None,
     createGuildChannelFn:        Option[(Snowflake, String) => F[Channel]]                                     = None,
-    createGuildChannelWithOverwritesFn: Option[(Snowflake, String, List[PermissionOverwrite]) => F[Channel]]   = None,
+    createGuildChannelWithOverwritesFn: Option[(Snowflake, String, List[PermissionOverwrite], Option[Snowflake]) => F[Channel]] = None,
+    createGuildCategoryFn:       Option[(Snowflake, String) => F[Channel]]                                     = None,
     getUserFn:                   Option[Snowflake => F[User]]                                                  = None,
     addReactionFn:               Option[(Snowflake, Snowflake, String) => F[Unit]]                             = None,
     registerGlobalCommandFn:     Option[(Snowflake, ApplicationCommand) => F[RegisteredCommand]]               = None,
@@ -269,10 +300,12 @@ object TestRestClient:
     // recordings
     sentMessages:          List[(Snowflake, MessageCreate)]                   = Nil,
     interactionResponses:  List[(Snowflake, String, InteractionResponse)]     = Nil,
+    deletedChannels:       List[Snowflake]                                    = Nil,
     deletedMessages:       List[(Snowflake, Snowflake)]                       = Nil,
     registeredCommands:    List[ApplicationCommand]                           = Nil,
     createdChannels:       List[(Snowflake, String)]                          = Nil,
-    createdPrivateChannels: List[(Snowflake, String, List[PermissionOverwrite])] = Nil,
+    createdCategories:     List[(Snowflake, String)]                          = Nil,
+    createdPrivateChannels: List[(Snowflake, String, List[PermissionOverwrite], Option[Snowflake])] = Nil,
     addedReactions:        List[(Snowflake, Snowflake, String)]               = Nil,
   )
 

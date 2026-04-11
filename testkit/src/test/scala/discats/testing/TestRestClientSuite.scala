@@ -210,20 +210,21 @@ object TestRestClientSuite extends SimpleIOSuite:
     val overwrite = PermissionOverwrite(id = "99", `type` = 0, allow = "8", deny = "0")
     for
       client <- TestRestClient.create[IO]
-      _      <- client.stubCreateGuildChannelWithOverwrites((_, _, _) => IO.pure(fakeChannel))
+      _      <- client.stubCreateGuildChannelWithOverwrites((_, _, _, _) => IO.pure(fakeChannel))
       ch     <- client.createGuildChannelWithOverwrites(guildId, "secret", List(overwrite))
     yield expect(ch == fakeChannel)
   }
 
-  test("createGuildChannelWithOverwrites records (guildId, name, overwrites) triples") {
+  test("createGuildChannelWithOverwrites records guild, name, overwrites, and parentId") {
     val guildId   = Snowflake(20L)
+    val parentId  = Some(Snowflake(30L))
     val overwrite = PermissionOverwrite(id = "99", `type` = 0, allow = "8", deny = "0")
     for
       client <- TestRestClient.create[IO]
-      _      <- client.stubCreateGuildChannelWithOverwrites((_, _, _) => IO.pure(fakeChannel))
-      _      <- client.createGuildChannelWithOverwrites(guildId, "secret", List(overwrite))
+      _      <- client.stubCreateGuildChannelWithOverwrites((_, _, _, _) => IO.pure(fakeChannel))
+      _      <- client.createGuildChannelWithOverwrites(guildId, "secret", List(overwrite), parentId)
       calls  <- client.createdPrivateChannels
-    yield expect(calls == List((guildId, "secret", List(overwrite))))
+    yield expect(calls == List((guildId, "secret", List(overwrite), parentId)))
   }
 
   test("unstubbed createGuildChannelWithOverwrites raises NotStubbedException") {
@@ -231,6 +232,16 @@ object TestRestClientSuite extends SimpleIOSuite:
       client <- TestRestClient.create[IO]
       result <- client.createGuildChannelWithOverwrites(Snowflake(1L), "x", Nil).attempt
     yield expect(result.left.exists(_.isInstanceOf[NotStubbedException]))
+  }
+
+  test("createGuildCategory records (guildId, name) pairs") {
+    val guildId = Snowflake(20L)
+    for
+      client <- TestRestClient.create[IO]
+      _      <- client.stubCreateGuildCategory((_, _) => IO.pure(fakeChannel))
+      _      <- client.createGuildCategory(guildId, "bingo fun")
+      calls  <- client.createdCategories
+    yield expect(calls == List((guildId, "bingo fun")))
   }
 
   // ── getUser ───────────────────────────────────────────────────────────────

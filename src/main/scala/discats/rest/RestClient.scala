@@ -19,6 +19,7 @@ trait RestClient[F[_]]:
 
   // ── Channels ──────────────────────────────────────────────────────────
   def getChannel(channelId: Snowflake): F[Channel]
+  def deleteChannel(channelId: Snowflake): F[Unit]
 
   // ── Messages ──────────────────────────────────────────────────────────
   def getMessage(channelId: Snowflake, messageId: Snowflake): F[DiscordMessage]
@@ -43,7 +44,11 @@ trait RestClient[F[_]]:
       guildId: Snowflake,
       name: String,
       overwrites: List[PermissionOverwrite],
+      parentId: Option[Snowflake] = None,
   ): F[Channel]
+
+  /** Create a category channel in a guild. Requires the Manage Channels permission. */
+  def createGuildCategory(guildId: Snowflake, name: String): F[Channel]
 
   // ── Users ─────────────────────────────────────────────────────────────
   def getUser(userId: Snowflake): F[User]
@@ -202,6 +207,9 @@ object RestClient:
     def getChannel(channelId: Snowflake): F[Channel] =
       get[Channel](s"/channels/${channelId.asString}")
 
+    def deleteChannel(channelId: Snowflake): F[Unit] =
+      delete(s"/channels/${channelId.asString}")
+
     def getMessage(channelId: Snowflake, messageId: Snowflake): F[DiscordMessage] =
       get[DiscordMessage](s"/channels/${channelId.asString}/messages/${messageId.asString}")
 
@@ -233,6 +241,7 @@ object RestClient:
         guildId: Snowflake,
         name: String,
         overwrites: List[PermissionOverwrite],
+        parentId: Option[Snowflake],
     ): F[Channel] =
       post[Json, Channel](
         s"/guilds/${guildId.asString}/channels",
@@ -240,7 +249,13 @@ object RestClient:
           "name"                  -> name.asJson,
           "type"                  -> 0.asJson,
           "permission_overwrites" -> overwrites.asJson,
-        ),
+        ).deepMerge(parentId.fold(Json.obj())(id => Json.obj("parent_id" -> id.asJson))),
+      )
+
+    def createGuildCategory(guildId: Snowflake, name: String): F[Channel] =
+      post[Json, Channel](
+        s"/guilds/${guildId.asString}/channels",
+        Json.obj("name" -> name.asJson, "type" -> 4.asJson),
       )
 
     def getUser(userId: Snowflake): F[User] =
