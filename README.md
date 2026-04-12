@@ -26,9 +26,13 @@ credentials += Credentials(
 )
 
 libraryDependencies += "io.github.discats" %% "discats" % "0.0.1"
+
+libraryDependencies += "io.github.discats" %% "discats-testkit" % "0.0.1" % Test
 ```
 
 A GitHub personal access token with `read:packages` scope is required. Set `GITHUB_ACTOR` to your GitHub username and `GITHUB_TOKEN` to your token.
+
+`discats-testkit` is published with the same version number as `discats`.
 
 ## Quick Start
 
